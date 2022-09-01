@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 use slab::Slab;
-use hyper::{Body, Error, Request, Response, Server, Method, StatusCode};
+use hyper::{Body, Error, Request, Response, Server, Method, StatusCode, client::connect::dns::Resolve};
 use futures::{future, Future};
 use hyper::service::service_fn;
 
@@ -22,6 +22,8 @@ struct UserData;
 
 type UserDb = Arc<Mutex<Slab<UserData>>>;
 
+const USER_PATH: &str = "/user/";
+
 
 fn main() {
     let addr    = ([127, 0, 0, 1], 8080).into();
@@ -41,16 +43,34 @@ fn main() {
 fn microservice_handler(req: Request<Body>, user_db: &UserDb)
     -> impl Future<Item = Response<Body>, Error = Error>
 {
-    match (req.method(), req.uri().path()) {
-        (&Method::GET, "/") => {
-            future::ok(Response::new(INDEX.into()))
-        },
-        _ => {
-            let response = Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Body::empty())
-                .unwrap();
-            future::ok(response)
+    let response = {
+        match (req.method(), req.uri().path()) {
+            (&Method::GET, "/") => {
+                Response::new(INDEX.into())
+            },
+            (method, path) if path.starts_with(USER_PATH) => {
+                let user_id = path.trim_left_matches(USER_PATH)
+                                  .parse::<UserId>()
+                                  .ok()
+                                  .map(|x| x as usize);
+
+                let mut users = user_db.lock().unwrap();
+                
+                unimplemented!();
+            },
+            _ => {
+                response_with_code(StatusCode::NOT_FOUND)
+            }
         }
-    }
+    };
+
+    future::ok(response)
+}
+
+
+fn response_with_code(status_code: StatusCode) -> Response<Body> {
+    Response::builder()
+        .status(status_code)
+        .body(Body::empty())
+        .unwrap()
 }
