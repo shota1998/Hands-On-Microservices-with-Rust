@@ -1,8 +1,11 @@
+use std::fmt;
 use std::sync::{Arc, Mutex};
 use slab::Slab;
 use hyper::{Body, Error, Request, Response, Server, Method, StatusCode, client::connect::dns::Resolve};
 use futures::{future, Future};
 use hyper::service::service_fn;
+use lazy_static::lazy_static;
+use regex::Regex;
 
 const INDEX: &str = r#"
 <!doctype html>
@@ -20,9 +23,19 @@ type UserId = u64;
 
 struct UserData;
 
+impl fmt::Display for UserData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("{}")
+    }
+}
+
 type UserDb = Arc<Mutex<Slab<UserData>>>;
 
-const USER_PATH: &str = "/user/";
+lazy_static! {
+    static ref INDEX_PATH: Regex = Regex::new("^/(index\\.html?)?$").unwrap();
+    static ref USER_PATH:  Regex = Regex::new("^/user/((?P<user_id>\\d+?)/?)?$").unwrap();
+    static ref USERS_PATH: Regex = Regex::new("^/users/?").unwrap();
+}
 
 
 fn main() {
@@ -55,8 +68,42 @@ fn microservice_handler(req: Request<Body>, user_db: &UserDb)
                                   .map(|x| x as usize);
 
                 let mut users = user_db.lock().unwrap();
-                
-                unimplemented!();
+
+                match (method, user_id) {
+                    (&Method::GET, Some(id)) => {
+                        if let Some(data) = users.get(id) {
+                            Response::new(data.to_string().into())
+                        } else {
+                            response_with_code(StatusCode::NOT_FOUND)
+                        }
+                    },
+                    (&Method::POST, None) => {
+                        let id = users.insert(UserData);
+                        Response::new(id.to_string().into())
+                    },
+                    (&Method::POST, Some(_)) => {
+                        response_with_code(StatusCode::BAD_REQUEST)
+                    },
+                    (&Method::PUT, Some(id)) => {
+                        if let Some(user) = users.get_mut(id) {
+                            *user = UserData;
+                            response_with_code(StatusCode::OK)
+                        }else {
+                            response_with_code(StatusCode::NOT_FOUND)
+                        }
+                    },
+                    (&Method::DELETE, Some(id)) => {
+                        if users.contains(id) {
+                            users.remove(id);
+                            response_with_code(StatusCode::OK)
+                        } else {
+                            response_with_code(StatusCode::NOT_FOUND)
+                        }
+                    },
+                    _ => {
+                        response_with_code(StatusCode::METHOD_NOT_ALLOWED)
+                    },
+                }
             },
             _ => {
                 response_with_code(StatusCode::NOT_FOUND)
