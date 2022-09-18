@@ -1,3 +1,5 @@
+mod color;
+
 use std::ops::Range;
 use futures::{future, Future, Stream};
 use hyper::{ Body, Error, Method, Request, Response, Server, StatusCode };
@@ -5,6 +7,7 @@ use hyper::service::service_fn;
 use rand;
 use serde_derive::{Serialize, Deserialize};
 use serde_json;
+
 
 static INDEX: &[u8] = b"Random Microservice";
 
