@@ -56,3 +56,14 @@ impl Serialize for Color {
 		serializer.serialize_str(&self.to_string())
 	}
 }
+
+
+struct ColorVisitor;
+
+impl<'de> Visitor<'de> for ColorVisitor {
+	type Value = Color;
+
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+
+	}
+}
