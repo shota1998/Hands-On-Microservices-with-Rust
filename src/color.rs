@@ -2,12 +2,27 @@ use std::fmt;
 use std::str::FromStr;
 use std::num::ParseIntError;
 use serde::{de::{self, Visitor}, Deserialize, Deserializer, Serialize, Serializer};
+use failure::Fail;
 
 
 pub const WHITE: Color = Color {red: 0xFF, green: 0xFF, blue: 0xFF};
 pub const BLACK: Color = Color {red: 0x00, green: 0x00, blue: 0x00};
 
+#[derive(Debug, Fail)]
+pub enum ColorError {
+	#[fail(display = "parse color's component error: {}", _0)]
+	InvalidComponent(#[cause] ParseIntError),
+	#[fail(display = "invalid value: {}", value)]
+	InvalidValue {
+		value: String,
+	},
+}
 
+impl From<ParseIntError> for ColorError {
+	fn from(err: ParseIntError) -> Self {
+		ColorError::InvalidComponent(err)
+	}
+}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Color {
@@ -64,6 +79,20 @@ impl<'de> Visitor<'de> for ColorVisitor {
 	type Value = Color;
 
 	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+		formatter.write_str("a color value expected")
+	}
 
+	fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> 
+    where 
+	    E: de::Error 
+	{
+		value.parse::<Color>().map_err(|err| de::Error::custom(err.to_string()))
+	}
+
+	fn visit_string<E>(self, value: String) -> Result<Self::Value, E> 
+	where 
+	    E: de::Error 
+	{
+		self.visit_str(value.as_ref())
 	}
 }
