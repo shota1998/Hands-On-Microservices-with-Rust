@@ -40,16 +40,6 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "489d6c0ed21b11d038c31b6ceccca973e65d73ba3bd8ecb9a2babf5546164643"
-dependencies = [
- "byteorder",
- "safemem",
-]
-
-[[package]]
-name = "base64"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
@@ -63,7 +53,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dcbb80c1f9f58fad55c19aa86b330f2960079e9fe76a3f61c803d2ac492f900"
 dependencies = [
- "base64 0.10.1",
+ "base64",
  "serde",
 ]
 
@@ -339,7 +329,7 @@ dependencies = [
 name = "hyper-microservice"
 version = "0.1.0"
 dependencies = [
- "base64 0.9.3",
+ "base64",
  "base64-serde",
  "failure",
  "futures",
@@ -610,12 +600,6 @@ name = "ryu"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4501abdff3ae82a1c1b477a17252eb69cee9e66eb915c1abaa4f44d873df9f09"
-
-[[package]]
-name = "safemem"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef703b7cb59335eae2eb93ceb664c0eb7ea6bf567079d843e09420219668e072"
 
 [[package]]
 name = "scopeguard"

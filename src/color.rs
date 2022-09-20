@@ -96,3 +96,12 @@ impl<'de> Visitor<'de> for ColorVisitor {
 		self.visit_str(value.as_ref())
 	}
 }
+
+impl<'a> Deserialize<'a> for Color {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+	    D: Deserializer<'a>,
+	{
+		deserializer.deserialize_any(ColorVisitor)
+	}
+}
