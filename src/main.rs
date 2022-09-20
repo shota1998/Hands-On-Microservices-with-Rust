@@ -1,13 +1,20 @@
 mod color;
 
 use std::ops::Range;
+use std::cmp::{max, min};
 use futures::{future, Future, Stream};
 use hyper::{ Body, Error, Method, Request, Response, Server, StatusCode };
 use hyper::service::service_fn;
-use rand;
+use rand::Rng;
+use rand::distributions::{Bernoulli, Normal, Uniform};
 use serde_derive::{Serialize, Deserialize};
 use serde_json;
+use base64::STANDARD;
+use base64_serde::base64_serde_type;
+use color::Color;
 
+
+base64_serde_type!(Base64Standard, STANDARD);
 
 static INDEX: &[u8] = b"Random Microservice";
 
@@ -25,11 +32,23 @@ enum RngRequest {
     Bernouli {
         p: f64,
     },
+    Shuffle {
+        #[serde(with = "Base64Standard")]
+        data: Vec<u8>,
+    },
+    Color {
+        from: Color,
+        to: Color,
+    },
 }
 
 #[derive(Serialize)]
-struct RngResponse {
-    value: f64,
+#[serde(rename_all = "lowercase")]
+enum RngResponse {
+    Value(f64),
+    #[serde(with = "Base64Standard")]
+    Bytes(Vec<u8>),
+    Color(Color),
 }
 
 fn handle_request(request: RngRequest) -> RngResponse {
@@ -37,8 +56,27 @@ fn handle_request(request: RngRequest) -> RngResponse {
     let value = {
         match request {
             RngRequest::Uniform { range } => {
-                rng.sample(Uniform::from(range))
-            }
+                let value =  rng.sample(Uniform::from(range)) as f64;
+                RngResponse::Value(value)
+            },
+            RngRequest::Normal { mean, std_dev } => {
+                let value = rng.sample(Normal::new(mean, std_dev)) as f64;
+                RngResponse::Value(value)
+            },
+            RngRequest::Bernouli { p } => {
+                let value = rng.sample(Bernoulli::new(p)) as i8 as f64;
+                RngResponse::Value(value)
+            },
+            RngRequest::Shuffle { mut data } => {
+                rng.shuffle(&mut data);
+                RngResponse::Bytes(data)
+            },
+            RngRequest::Color { from, to } => {
+                let red = rng.sample(color_range(from.red, to.red));
+                let green = rng.sample(color_range(from.green, to.red));
+                let blue = rng.sample(color_range(from.blue, to.blue));
+                RngResponse::Color(Color {red, green, blue})
+            },
         }
     }
 }
