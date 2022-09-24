@@ -3,15 +3,18 @@ mod color;
 use std::ops::Range;
 use std::cmp::{max, min};
 use futures::{future, Future, Stream};
-use hyper::{ Body, Error, Method, Request, Response, Server, StatusCode };
+use hyper::{ Body, Method, Request, Response, Server, StatusCode };
 use hyper::service::service_fn;
 use rand::Rng;
 use rand::distributions::{Bernoulli, Normal, Uniform};
 use serde_derive::{Serialize, Deserialize};
-use serde_json;
+use serde_json::Value;
 use base64::STANDARD;
 use base64_serde::base64_serde_type;
 use color::Color;
+use queryst;
+use serde_cbor;
+use failure::{format_err, Error};
 
 
 base64_serde_type!(Base64Standard, STANDARD);
@@ -84,19 +87,39 @@ fn handle_request(request: RngRequest) -> RngResponse {
     }
 }
 
+fn serialize(format: &str, resp: &RngResponse) -> Result<Vec<u8>, Error> {
+    match format {
+        "json" => {
+            Ok(serde_json::to_vec(resp)?)
+        },
+        "cbor" => {
+            Ok(serde_cbor::to_vec(resp)?)
+        },
+        _ => {
+            Err(format_err!("unsupported format {}", format))
+        },
+    }
+}
+
 fn microservice_handler(req: Request<Body>)
-    -> Box<dyn Future<Item=Response<Body>, Error=Error> + Send>
+    -> Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>
 {
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/") | (&Method::GET, "/random") => {
             Box::new(future::ok(Response::new(INDEX.into())))
         },
         (&Method::POST, "/random") => {
+            let format = {
+                let uri = req.uri().query().unwrap_or("");
+                let query = queryst::parse(uri).unwrap_or(Value::Null);
+                query["format"].as_str().unwrap_or("json").to_string()
+            };
             let body = req.into_body().concat2()
                 .map(|chunks| {
                     let res = serde_json::from_slice::<RngRequest>(chunks.as_ref())
                         .map(handle_request)
-                        .and_then(|resp| serde_json::to_string(&resp));
+                        .map_err(Error::from)
+                        .and_then(move |resp| serialize(&format, &resp));
                     match res {
                         Ok(body) => {
                             Response::new(body.into())
