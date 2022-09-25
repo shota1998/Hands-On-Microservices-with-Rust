@@ -17,9 +17,40 @@ where
     Box::new(fut)
 }
 
-fn main() {
-    multiple();
+fn other<E>(err: E) -> io::Error
+where
+    E: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
+    io::Error::new(io::ErrorKind::Other, err)
 }
+
+
+fn main() {
+    single();
+    multiple();
+    send_spawn();
+    println!("Start UDP echo");
+    alt_udp_echo().unwrap();
+}
+
+
+fn single() {
+    let (tx_sender, rx_future) = oneshot::channel::<u8>();
+    
+    let receiver = rx_future.map(|x| {
+        println!("Received: {}", x);
+    });
+
+    let sender = tx_sender.send(8);
+
+    let exexute_all = future::join_all(vec![
+        to_box(receiver),
+        to_box(sender),
+    ]).map(drop);
+
+    tokio::run(exexute_all);
+}
+
 
 fn multiple() {
     let (tx_sink, rx_stream) = mpsc::channel::<u8>(8);
@@ -42,5 +73,55 @@ fn multiple() {
     ]).map(drop);
 
     drop(tx_sink);
+    tokio::run(execute_all);
+}
+
+
+fn alt_udp_echo() -> Result<(), Error> {
+    let from = "0.0.0.0:12345".parse()?;
+    let socket = UdpSocket::bind(&from)?;
+    let framed = UdpFramed::new(socket, LinesCodec::new());
+    let (sink, stream) = framed.split();
+    let (tx, rx) = mpsc::channel(16);
+
+    let rx = rx.map_err(|_| other("can't take a message"))
+        .fold(sink, |sink, frame| {
+            sink.send(frame)
+        });
+    
+    let process = stream.and_then(move |args| {
+        tx.clone()
+            .send(args)
+            .map(drop)
+            .map_err(other)
+    }).collect();
+
+    let execute_all = future::join_all(vec![
+        to_box(rx),
+        to_box(process),
+    ]).map(drop);
+
+    Ok(tokio::run(execute_all))
+}
+
+
+fn send_spawn() {
+    let (tx_sink, rx_stream) = mpsc::channel::<u8>(8);
+
+    let receiver = rx_stream.fold(0, |acc, value| {
+        println!("Received: {}", value);
+        future::ok(acc + value)
+    }).map(drop);
+
+    let spawner = stream::iter_ok::<_, ()>(1u8..11u8).map(move |x| {
+        let fut = tx_sink.clone().send(x).map(drop).map_err(drop);
+        tokio::spawn(fut);
+    }).collect();
+
+    let execute_all = future::join_all(vec![
+        to_box(spawner),
+        to_box(receiver),
+    ]).map(drop);
+
     tokio::run(execute_all);
 }
